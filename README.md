@@ -1,5 +1,5 @@
 # tooi
 compile
-$g++ main.cpp -o main
+g++ main.cpp -o main
 run
-$./main <dir> <num>
+./main <dir> <num>
