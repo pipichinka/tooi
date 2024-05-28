@@ -1,5 +1,6 @@
 # tooi
 ## compile
+cd texts
 g++ main.cpp -o main
 ## run
 ./main dir num_classes
