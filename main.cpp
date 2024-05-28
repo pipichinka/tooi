@@ -44,8 +44,9 @@ public:
 
 class DocumentMatrixClass{
     std::vector<Document*> docs;
+    std::vector<int> vector;
 public:
-    DocumentMatrixClass( Document* doc): docs({doc}){}
+    DocumentMatrixClass( Document* doc, const std::vector<int>& vec): docs({doc}), vector(vec){}
 
     const std::vector<Document*>& getDocs(){
         return docs;
@@ -55,6 +56,16 @@ public:
         for (size_t i = 0; i < doc.size(); i++){
             docs.push_back(doc[i]);
         }
+    }
+
+    void addVector(const std::vector<int>& vec){
+        for (int i = 0; i < vec.size(); i++){
+            vector[i] = std::max(vector[i], vec[i]);
+        }
+    }
+
+    const std::vector<int>& getVector(){
+        return vector;
     }
 
 };
@@ -176,7 +187,50 @@ class DocumentMatrix{
         // }
         // std::cout << std::endl;
     }
+    
 
+    void groupTwoClasses_2(){
+        double minDiff = INFINITY;
+        int minDiffIndex = -1;
+        for (int i = 0; i < size; i++){
+            for (int j = i; j < size; j++){
+                int index = i * size + j;
+                if (matrix[index] < minDiff && i != j){
+                    minDiff = matrix[index];
+                    minDiffIndex = index;
+                }
+            }
+        }
+        int iIndex = minDiffIndex / size;
+        int jIndex = minDiffIndex % size;
+        int minIndex = std::min(iIndex, jIndex);
+        int maxIndex = std::max(iIndex, jIndex);
+        matrixClasses[minIndex]->addDocuments(matrixClasses[maxIndex]->getDocs());
+        matrixClasses[minIndex]->addVector(matrixClasses[maxIndex]->getVector());
+        DocumentMatrixClass** c = new DocumentMatrixClass*[size - 1]{nullptr};
+        for (int i = 0; i < size - 1; i++){
+            if ( i < maxIndex){
+                c[i] = matrixClasses[i];
+            } else {
+                c[i] = matrixClasses[i + 1];
+            }
+        }
+        delete matrixClasses[maxIndex];
+        delete [] matrixClasses;
+        matrixClasses = c;
+        delete [] matrix;
+        size--;
+        matrix = new double[size*size];
+        for (size_t i = 0; i < size; i++){
+            for (size_t j = i; j < size; j++){
+                size_t index1 = i * size + j;
+                size_t index2 = j * size + i;
+                matrix[index1] = countVectorDiff(matrixClasses[i]->getVector(), matrixClasses[j]->getVector());
+                matrix[index2] = matrix[index1];
+            }
+        }
+    }
+    
 public:
     DocumentMatrix(const std::vector<Document*>& documents): 
     matrix(new  double[documents.size() * documents.size()]{0.0}), 
@@ -233,7 +287,7 @@ public:
                 matrix[index1] = countVectorDiff(documentsVectors[i], documentsVectors[j]);
                 matrix[index2] = matrix[index1];
             }
-            matrixClasses[i] = new DocumentMatrixClass(documents[i]);
+            matrixClasses[i] = new DocumentMatrixClass(documents[i], documentsVectors[i]);
         }
 
 
@@ -251,7 +305,7 @@ public:
         //         std::cout << matrix[i * size + j] << "  ";
         //     }
         //     std::cout << std::endl;
-        // }
+        //}
     }
 
 
@@ -260,8 +314,16 @@ public:
         for (int i = 0; i < count; i++){
             groupTwoClasses();
         }
-
     }
+
+
+    void claster_2(int k){
+        int count = size - k;
+        for (int i = 0; i < count; i++){
+            groupTwoClasses_2();
+        }
+    }
+
 
     DocumentMatrixClass** getClasses(){
         return matrixClasses;
@@ -346,9 +408,19 @@ int main(int argc, char** argv){
             std::cout << "class: " << i + 1 << std::endl;
             repository.printClassInfo(classes[i]);
         }
+        std::cout << std::endl << std::endl;
+
+        DocumentMatrix matrix_2(documents);
+        matrix_2.claster_2(std::stoi(argv[2]));
+        DocumentMatrixClass** classes_2 = matrix_2.getClasses();
+
+        for (int i = 0; i < matrix_2.getSize(); i++){
+            std::cout << "class: " << i + 1 << std::endl;
+            repository.printClassInfo(classes_2[i]);
+        }
+
 
     } catch(std::exception& e){
         std::cerr << "error: " << e.what() << std::endl;
     }
-
 }
