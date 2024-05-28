@@ -10,12 +10,14 @@
 
 namespace fs = std::filesystem;
 
+//класс представляющий документ из коллекции
 class Document{
     std::string fileName;
     std::unordered_map<std::string, int> lems;
-    int totalWordCount;
+    int totalLemCount;
 public:
-    Document(const std::string& fileName): fileName(fileName), totalWordCount(0){
+    Document(const std::string& fileName): fileName(fileName), totalLemCount(0){
+        //читаем текст из файла, текст подгтовлен так, что слова разделены пробелами или переносами строк
         std::ifstream file(fileName, std::ios_base::openmode::_S_in);
         while (!file.eof()){
             std::string word;
@@ -24,7 +26,7 @@ public:
                 continue;
             }
             lems[word] += 1;
-            totalWordCount++;
+            totalLemCount++;
         }
     }
 
@@ -32,8 +34,8 @@ public:
         return lems;
     }
 
-    int getTotalWordCount(){
-        return totalWordCount;
+    int gettotalLemCount(){
+        return totalLemCount;
     }
 
     const std::string& getFileName(){
@@ -41,7 +43,7 @@ public:
     }
 };
 
-
+// представляет собой набор документов и вектор разницы данного класса от всех значимых слов коллекции
 class DocumentMatrixClass{
     std::vector<Document*> docs;
     std::vector<int> vector;
@@ -52,13 +54,13 @@ public:
         return docs;
     }
 
-    void addDocuments(const std::vector<Document*>& doc){
+    void addDocuments(const std::vector<Document*>& doc){ 
         for (size_t i = 0; i < doc.size(); i++){
             docs.push_back(doc[i]);
         }
     }
 
-    void addVector(const std::vector<int>& vec){
+    void addVector(const std::vector<int>& vec){ // мы объединяем вектора 2 классов, для дальнейшего пересчёта матрицы
         for (int i = 0; i < vec.size(); i++){
             vector[i] = std::max(vector[i], vec[i]);
         }
@@ -70,7 +72,7 @@ public:
 
 };
 
-
+// подсчёт рассотяния между векторами
 double countVectorDiff(const std::vector<int>& vec1, const std::vector<int>& vec2){
     double res = 0;
     for (size_t i = 0; i < vec1.size(); i++){
@@ -80,14 +82,17 @@ double countVectorDiff(const std::vector<int>& vec1, const std::vector<int>& vec
     return sqrt(res);
 }
 
-
+// представляет собой матрицу разниц классов
+// изначально каждый класс состоит из одного документа
 class DocumentMatrix{
     double* matrix;
     int size;
     DocumentMatrixClass** matrixClasses;
 
-
+    // объединяем 2 класса с минимальным различием
+    // пересчитываем матрицу используя формулу p(U+W, V) = (p(U, V) + p(W, V)) / 2
     void groupTwoClasses(){
+        //сначала мы ищем 2 класса с минималным расстоянием между ними
         double minDiff = INFINITY;
         int minDiffIndex = -1;
         for (int i = 0; i < size; i++){
@@ -103,6 +108,7 @@ class DocumentMatrix{
         int jIndex = minDiffIndex % size;
         int minIndex = std::min(iIndex, jIndex);
         int maxIndex = std::max(iIndex, jIndex);
+        // соединяем 2 класса в один
         matrixClasses[minIndex]->addDocuments(matrixClasses[maxIndex]->getDocs());
         DocumentMatrixClass** c = new DocumentMatrixClass*[size - 1]{nullptr};
         for (int i = 0; i < size - 1; i++){
@@ -112,6 +118,9 @@ class DocumentMatrix{
                 c[i] = matrixClasses[i + 1];
             }
         }
+        delete matrixClasses[maxIndex];
+
+        //пересчитываем матрицу. ставим новый класс на место с минимальным индексом, объединённых классов
         double* m = new double[(size - 1) * (size - 1)]{0.0};
         for (int i = 0; i < size - 1; i++){
             for (int j = i; j < size - 1; j++){
@@ -165,30 +174,16 @@ class DocumentMatrix{
                 }
             }
         }
+        //очищаем 
         delete [] matrix;
         delete [] matrixClasses;
         matrix = m;
         matrixClasses = c;
         size--;
-        // std::cout << std::endl;
-        // for (int i = 0; i < size; i++){
-        //     const std::vector<Document*>& docs = matrixClasses[i]->getDocs();
-        //     for (int j = 0; j < docs.size(); j++){
-        //         std::cout << docs[j]->getFileName() << ", ";
-        //     }
-        //     std::cout << "|";
-        // }
-        // std::cout << std::endl;
-        // for (int i = 0; i < size; i++){
-        //     for (int j = 0; j < size; j++){
-        //         std::cout << matrix[i * size + j] << "  ";
-        //     }
-        //     std::cout << std::endl;
-        // }
-        // std::cout << std::endl;
     }
     
-
+    // объединяем 2 класса с минимальным различием, так же объединяем их вектора
+    // матрица пересчитывается исходя из новых векторов(так же как и при инициализации)
     void groupTwoClasses_2(){
         double minDiff = INFINITY;
         int minDiffIndex = -1;
@@ -232,17 +227,23 @@ class DocumentMatrix{
     }
     
 public:
+    /*
+        создаём матрицу на основе документов коллекции
+        выбираем из документов леммы для формирования вектора важных слов коллекции
+        строим начальные классы из документов считая их вектор сходства с вектором важных слов коллекции
+        вычисляем начальную матрицу различий между классами
+    */
     DocumentMatrix(const std::vector<Document*>& documents): 
     matrix(new  double[documents.size() * documents.size()]{0.0}), 
     size(documents.size()),
     matrixClasses(new DocumentMatrixClass*[documents.size()]{nullptr}){
-
+        // леммы собираем в set, чтобы осключить повторения
         std::unordered_set<std::string> global_lems;
         for (Document* document: documents){
-            const std::unordered_map<std::string, int>& lems = document->getLems();
+            const std::unordered_map<std::string, int>& lems = document->getLems(); // леммы коллекции выбираются на основе показателя TF IDF
             std::vector<std::pair<std::string, double>> lems_tfidf;
             for (const auto& lem:lems){
-                double tf = (double) lem.second / document->getTotalWordCount();
+                double tf = (double) lem.second / document->gettotalLemCount();
                 int numDocsHaveLem = 0;
                 for (Document* d: documents){
                     if (d->getLems().find(lem.first) != d->getLems().end()){
@@ -259,6 +260,7 @@ public:
                 bool operator()(const std::pair<std::string, double>& a, const std::pair<std::string, double>& b) const { return a.second > b.second; }
             }
             customMore;
+            // сортируем леммы чтобы выбрать леммы с наибольшим показателем TF IDF
             std::sort(lems_tfidf.begin(), lems_tfidf.end(), customMore);
             for (size_t i = 0; i < std::min(lems_tfidf.size(), (size_t) 50); i++){
                 global_lems.insert(lems_tfidf[i].first);
@@ -266,9 +268,9 @@ public:
         }
 
         if (global_lems.empty()){
-            throw std::runtime_error("no lems given to make matrix");
+            throw std::runtime_error("no lems given to make global lem vector");
         }
-
+        // создаём вектора текстов документов если в слове есть лемма то ставим 1 в вектор, иначе 0
         std::vector<std::vector<int>> documentsVectors(documents.size());
         for (const auto& lem: global_lems){
             for (size_t i = 0; i < documents.size(); i++){
@@ -279,7 +281,7 @@ public:
                 }
             }
         }
-
+        //вычисляем значения в матрице различий и создаём классы из документов коллекции
         for (size_t i = 0; i < documentsVectors.size(); i++){
             for (size_t j = i; j < documentsVectors.size(); j++){
                 size_t index1 = i * size + j;
@@ -289,26 +291,11 @@ public:
             }
             matrixClasses[i] = new DocumentMatrixClass(documents[i], documentsVectors[i]);
         }
-
-
-        //std::cout << std::endl;
-        // for (int i = 0; i < size; i++){
-        //     const std::vector<Document*>& docs = matrixClasses[i]->getDocs();
-        //     for (int j = 0; j < docs.size(); j++){
-        //         std::cout << docs[j]->getFileName() << ", ";
-        //     }
-        //     std::cout << " ";
-        // }
-        // std::cout << std::endl;
-        // for (int i = 0; i < size; i++){
-        //     for (int j = 0; j < size; j++){
-        //         std::cout << matrix[i * size + j] << "  ";
-        //     }
-        //     std::cout << std::endl;
-        //}
     }
 
-
+    // идея кластеризации заключается в объединении классов по 2, 
+    // пока не останется нужное колличестов классов
+    // кластеризация методом с семинара
     void claster(int k){
         int count = size - k;
         for (int i = 0; i < count; i++){
@@ -316,7 +303,9 @@ public:
         }
     }
 
-
+    // идея кластеризации заключается в объединении классов по 2, 
+    // пока не останется нужное колличестов классов
+    // кластеризация собственным методом
     void claster_2(int k){
         int count = size - k;
         for (int i = 0; i < count; i++){
@@ -334,7 +323,8 @@ public:
     }
 };
 
-
+// используется для сопоставления документов коллекции и ссылкам на статьи,
+// которые находятся в файле info.txt в дирректории с документами
 class Repository{
     std::unordered_map<std::string, std::string> textsUrls;
     std::vector<std::string> textsFileNames;
@@ -374,7 +364,8 @@ public:
         return textsFileNames;
     }
 
-
+    // выводим информацию о классе в формате
+    // <file_name> <url>
     void printClassInfo(DocumentMatrixClass* c){
         auto docs = c->getDocs();
         for (Document* doc: docs){
@@ -398,24 +389,24 @@ int main(int argc, char** argv){
     try{
         Repository repository(argv[1]);
         for (const std::string& fileName: repository.getTextsFileNames()){
-            documents.push_back(new Document(fileName));
+            documents.push_back(new Document(fileName)); // создаём документ из каждого файла дирректории
         }
         DocumentMatrix matrix(documents);
-        matrix.claster(std::stoi(argv[2]));
+        matrix.claster(std::stoi(argv[2])); // кластеризуем алгоритмом с семинара
         DocumentMatrixClass** classes = matrix.getClasses();
 
         for (int i = 0; i < matrix.getSize(); i++){
-            std::cout << "class: " << i + 1 << std::endl;
+            std::cout << "class: " << i + 1 << std::endl; // выводим информацио о полученных классах
             repository.printClassInfo(classes[i]);
         }
         std::cout << std::endl << std::endl;
 
         DocumentMatrix matrix_2(documents);
-        matrix_2.claster_2(std::stoi(argv[2]));
+        matrix_2.claster_2(std::stoi(argv[2])); // кластеризуем собственным алгоритмом
         DocumentMatrixClass** classes_2 = matrix_2.getClasses();
 
         for (int i = 0; i < matrix_2.getSize(); i++){
-            std::cout << "class: " << i + 1 << std::endl;
+            std::cout << "class: " << i + 1 << std::endl; // выводим информацио о полученных классах
             repository.printClassInfo(classes_2[i]);
         }
 
